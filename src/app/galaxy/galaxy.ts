@@ -49,51 +49,54 @@ export class Galaxy implements AfterViewInit, OnDestroy {
       this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     })
 
+    // Axes Helper
+    const axesHelper = new THREE.AxesHelper();
+    scene.add(axesHelper);
+
     // Galaxy Properties
-    const galaxyProperties = {
-      count: 10000,
-      size: 0.01,
+    const parameters = {
+      count: 1000,
+      size: 0.1,
+      radius: 5,
+      branches: 3,
     };
 
-    let galaxyGeometry: THREE.BufferGeometry | null = null;
-    let galaxyMaterial: THREE.PointsMaterial | null = null;
-    let particles: THREE.Points | null = null;
-
     // Galaxy Generation Function
+    let geometry: THREE.BufferGeometry | null = null;
+    let material: THREE.PointsMaterial | null = null;
+    let points: THREE.Points | null = null;
     const generateGalaxy = () => {
-      if (particles !== null) {
-        galaxyGeometry?.dispose();
-        galaxyMaterial?.dispose();
-        scene.remove(particles);
+      if (points !== null) {
+        geometry?.dispose();
+        material?.dispose();
+        scene.remove(points);
       }
-
-      // Geometry
-      galaxyGeometry = new THREE.BufferGeometry();
-      // Float32Array
-      const positions = new Float32Array(galaxyProperties.count * 3);
-      for(let i = 0; i < galaxyProperties.count; i++) {
-        let i3 = i * 3;
-        positions[i3 + 0] = (Math.random() - 0.5);
-        positions[i3 + 1] = (Math.random() - 0.5);
-        positions[i3 + 2] = (Math.random() - 0.5);
+      geometry = new THREE.BufferGeometry();
+      const positions = new Float32Array(parameters.count * 3);
+      for (let i = 0; i < parameters.count; i++) {
+        const i3 = i * 3;
+        const radius = (Math.random() - 0.5) * parameters.radius;
+        positions[i3] = radius;
+        positions[i3 + 1] = 0;
+        positions[i3 + 2] = 0;
       }
-      const bufferattribute = new THREE.BufferAttribute(positions, 3);
-      galaxyGeometry.setAttribute('position', bufferattribute);
+      const bufferAttribute = new THREE.BufferAttribute(positions, 3);
+      geometry.setAttribute('position', bufferAttribute);
 
-      // Material
-      galaxyMaterial = new THREE.PointsMaterial();
-      galaxyMaterial.size = galaxyProperties.size;
-      galaxyMaterial.sizeAttenuation = true;
-
-      // Particles
-      particles = new THREE.Points(galaxyGeometry, galaxyMaterial);
-      scene.add(particles);
+      material = new THREE.PointsMaterial();
+      material.size = parameters.size;
+      material.sizeAttenuation = true;
+      material.depthWrite = false;
+      material.blending = THREE.AdditiveBlending;
+      points = new THREE.Points(geometry, material);
+      scene.add(points);
     }
 
-    // Galaxy Tweaks
-    gui.add(galaxyProperties, 'count').min(100).max(100000).step(10).onFinishChange(generateGalaxy);
-    gui.add(galaxyProperties, 'size').min(0.001).max(0.1).step(0.001).onChange(generateGalaxy);
-
+    // Tweaks
+    gui.add(parameters, 'count').min(100).max(10000).step(100).onFinishChange(generateGalaxy);
+    gui.add(parameters, 'size').min(0.01).max(0.5).step(0.001).onFinishChange(generateGalaxy);
+    gui.add(parameters, 'radius').min(0.01).max(20).step(0.01).onFinishChange(generateGalaxy);
+    gui.add(parameters, 'branches').min(2).max(20).step(1).onFinishChange(generateGalaxy);
 
     generateGalaxy();
     // WebglRenderer
