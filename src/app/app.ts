@@ -3,11 +3,12 @@ import { Cube } from './cube/cube';
 import { RouterModule } from '@angular/router';
 import { Textures } from "./textures/textures";
 import { Lights } from './lights/lights';
+import { Galaxy } from './galaxy/galaxy';
 
 @Component({
   selector: 'app-root',
   standalone: true,
-  imports: [RouterModule, Cube, Textures, Lights],
+  imports: [RouterModule, Cube, Textures, Lights, Galaxy],
   templateUrl: './app.html',
   styleUrl: './app.scss'
 })
