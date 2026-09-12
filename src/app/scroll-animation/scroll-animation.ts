@@ -1,6 +1,7 @@
 import { AfterViewInit, Component, ElementRef, OnDestroy, viewChild } from '@angular/core';
 import { GUI } from 'lil-gui';
 import * as THREE from 'three';
+import gsap from 'gsap';
 
 @Component({
   selector: 'app-scroll-animation',
@@ -22,7 +23,10 @@ export class ScrollAnimation implements AfterViewInit, OnDestroy {
 
     gui
         .addColor(parameters, 'materialColor')
-        .onChange(() => {meshToonMaterial.color.set(parameters.materialColor)})
+        .onChange(() => {
+          meshToonMaterial.color.set(parameters.materialColor)
+          particles.material.color.set(parameters.materialColor)
+        })
 
     // Texture
     const textureLoader = new THREE.TextureLoader();
@@ -123,38 +127,75 @@ export class ScrollAnimation implements AfterViewInit, OnDestroy {
     const sectionMeshes = [ mesh1, mesh2, mesh3 ];
 
     let scrollY = window.scrollY;
+    let currentSection = 0;
     addEventListener("scroll", () => {
       scrollY = window.scrollY;
+      const newSection = Math.round(scrollY / sizes.height);
+      if (newSection != currentSection) {
+        currentSection = newSection;  
+        gsap.to(
+          sectionMeshes[currentSection].rotation,
+          {
+            duration: 1.5,
+            ease: 'power2.inOut',
+            x: '+=6',
+            y: '+=3',
+            z: '+=1.5'
+          }
+        ) 
+      }
     });
 
 
     /**
      * Lights
      */
-    const directionalLight = new THREE.DirectionalLight('#ffffff', 3)
-    directionalLight.position.set(1, 1, 0)
-    scene.add(directionalLight)
+    const directionalLight = new THREE.DirectionalLight('#ffffff', 3);
+    directionalLight.position.set(1, 1, 0);
+    scene.add(directionalLight);
+
+    // Adding Particles
+    const particlesCount = 2000;
+    const bufferGeometry = new THREE.BufferGeometry();
+    const positions = new Float32Array(particlesCount * 3);
+    for (let i = 0; i < particlesCount; i++) {
+      const i3 = i * 3;
+      positions[i3 + 0] = (Math.random() - 0.5) * 10;
+      positions[i3 + 1] = objectDistance * 0.5 - Math.random() * objectDistance * sectionMeshes.length;
+      positions[i3 + 2] = (Math.random() - 0.5) * 10;
+    };
+    bufferGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+    const material = new THREE.PointsMaterial({
+      color: parameters.materialColor,
+      sizeAttenuation: true,
+      size: 0.03
+    });
+    const particles = new THREE.Points(bufferGeometry, material);
+    scene.add(particles);
+
 
     /**
      * Animate
      */
-    const clock = new THREE.Clock()
+    const clock = new THREE.Clock();
+    let previousTime = 0;
 
     const tick = () => {
       const elapsedTime = clock.getElapsedTime();
-
+      const deltaTime = elapsedTime - previousTime;
+      previousTime = elapsedTime;
       // Animate meshes
       for (const mesh of sectionMeshes) {
-        mesh.rotation.x = elapsedTime * 0.1
-        mesh.rotation.y = elapsedTime * 0.12
+        mesh.rotation.x += deltaTime * 0.1
+        mesh.rotation.y += deltaTime * 0.12
       }
 
       // Animate Camera
       this.camera.position.y = - scrollY / sizes.height * objectDistance;
       const parallaxX = cursor.x;
       const parallaxY = - cursor.y;
-      cameraGroup.position.x += (parallaxX - cameraGroup.position.x) * 0.1;
-      cameraGroup.position.y += (parallaxY - cameraGroup.position.y) * 0.1;
+      cameraGroup.position.x += (parallaxX - cameraGroup.position.x) * 5 * deltaTime;
+      cameraGroup.position.y += (parallaxY - cameraGroup.position.y) * 5 * deltaTime;
 
       // Render
       this.renderer.render(scene, this.camera);
