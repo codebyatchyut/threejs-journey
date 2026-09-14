@@ -2,7 +2,7 @@ import { AfterViewInit, Component, ElementRef, OnDestroy, viewChild } from '@ang
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import GUI from 'lil-gui';
-import CANNON from 'cannon';
+import CANNON, { Shape } from 'cannon';
 
 @Component({
   selector: 'app-physics-world',
@@ -126,6 +126,29 @@ export class PhysicsWorld implements AfterViewInit, OnDestroy {
 
     // Physics
     const world = new CANNON.World();
+    world.gravity.set(0, - 9.82, 0);
+
+    // CANNON Sphere body
+    const sphereShape = new CANNON.Sphere(0.5);
+    const sphereBody = new CANNON.Body({
+      mass: 1,
+      position: new CANNON.Vec3(0, 3, 0),
+      shape: sphereShape
+    });
+
+    world.addBody(sphereBody);
+
+    // CANNON floor body
+    const floorShape = new CANNON.Plane();
+    const floorBody = new CANNON.Body();
+    floorBody.mass = 0;
+    floorBody.addShape(floorShape);
+    world.addBody(floorBody);
+
+    floorBody.quaternion.setFromAxisAngle(
+      new CANNON.Vec3(-1, 0, 0),
+      Math.PI * 0.5
+    )
 
     /**
      * Renderer
@@ -141,7 +164,18 @@ export class PhysicsWorld implements AfterViewInit, OnDestroy {
     /**
      * Animate
      */
+    const clock = new THREE.Clock();
+    let oldElapsedTime = 0;
     const tick = () => {
+      const elapsedTime = clock.getElapsedTime();
+      const deltaTime = elapsedTime - oldElapsedTime;
+      oldElapsedTime = elapsedTime;
+
+      // Update Physics World
+      world.step(1 / 60, deltaTime, 3);
+      sphere.position.copy(sphereBody.position);
+      sphere.quaternion.copy(sphereBody.quaternion);
+
       // Update controls
       controls.update();
 
