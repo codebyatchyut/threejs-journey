@@ -2,7 +2,7 @@ import { AfterViewInit, Component, ElementRef, OnDestroy, viewChild } from '@ang
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import GUI from 'lil-gui';
-import CANNON, { Shape } from 'cannon';
+import CANNON, { ContactMaterial, Shape } from 'cannon';
 
 @Component({
   selector: 'app-physics-world',
@@ -127,14 +127,21 @@ export class PhysicsWorld implements AfterViewInit, OnDestroy {
     // Physics
     const world = new CANNON.World();
     world.gravity.set(0, - 9.82, 0);
+    
+    // CANNON Materials
+    // const concreteMaterial = new CANNON.Material('concrete');
+    // const plasticMaterial = new CANNON.Material('plastic');
+    const defaultMaterial = new CANNON.Material('default');
 
     // CANNON Sphere body
     const sphereShape = new CANNON.Sphere(0.5);
     const sphereBody = new CANNON.Body({
       mass: 1,
       position: new CANNON.Vec3(0, 3, 0),
-      shape: sphereShape
+      shape: sphereShape,
+      // material: defaultMaterial
     });
+    sphereBody.applyLocalForce(new CANNON.Vec3(150, 0, 0), new CANNON.Vec3(0, 0, 0));
 
     world.addBody(sphereBody);
 
@@ -143,13 +150,25 @@ export class PhysicsWorld implements AfterViewInit, OnDestroy {
     const floorBody = new CANNON.Body();
     floorBody.mass = 0;
     floorBody.addShape(floorShape);
+    // floorBody.material = defaultMaterial;
     world.addBody(floorBody);
 
     floorBody.quaternion.setFromAxisAngle(
       new CANNON.Vec3(-1, 0, 0),
       Math.PI * 0.5
-    )
+    );
 
+    // Contact material, means apply these physics rules when two objects are collide (friction, restitution)
+    const defaultContactMaterial = new ContactMaterial(
+      defaultMaterial,
+      defaultMaterial,
+      {
+        friction: 0.1,
+        restitution: 0.7
+      }
+    );
+    world.addContactMaterial(defaultContactMaterial);
+    world.defaultContactMaterial = defaultContactMaterial;
     /**
      * Renderer
      */
@@ -172,6 +191,7 @@ export class PhysicsWorld implements AfterViewInit, OnDestroy {
       oldElapsedTime = elapsedTime;
 
       // Update Physics World
+      sphereBody.applyForce(new CANNON.Vec3(-0.5, 0, 0), sphereBody.position);
       world.step(1 / 60, deltaTime, 3);
       sphere.position.copy(sphereBody.position);
       sphere.quaternion.copy(sphereBody.quaternion);
