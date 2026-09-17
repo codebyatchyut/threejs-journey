@@ -2,7 +2,7 @@ import { AfterViewInit, Component, ElementRef, OnDestroy, viewChild } from '@ang
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import GUI from 'lil-gui';
-import CANNON, { ContactMaterial, Shape } from 'cannon';
+import CANNON, { Body, ContactMaterial, Shape } from 'cannon';
 
 @Component({
   selector: 'app-physics-world',
@@ -22,6 +22,7 @@ export class PhysicsWorld implements AfterViewInit, OnDestroy {
      * Debug
      */
     this.gui = new GUI();
+    const debugObject: {createSphere?: () => void;} = {};
 
     // Scene
     const scene = new THREE.Scene();
@@ -43,18 +44,51 @@ export class PhysicsWorld implements AfterViewInit, OnDestroy {
     /**
      * Test sphere
      */
-    const sphere = new THREE.Mesh(
-      new THREE.SphereGeometry(0.5, 32, 32),
-      new THREE.MeshStandardMaterial({
-        metalness: 0.3,
-        roughness: 0.4,
-        envMap: environmentMapTexture,
-        envMapIntensity: 0.5
+    // const sphere = new THREE.Mesh(
+    //   new THREE.SphereGeometry(0.5, 32, 32),
+    //   new THREE.MeshStandardMaterial({
+    //     metalness: 0.3,
+    //     roughness: 0.4,
+    //     envMap: environmentMapTexture,
+    //     envMapIntensity: 0.5
+    //   })
+    // );
+    // sphere.castShadow = true;
+    // sphere.position.y = 0.5;
+    // scene.add(sphere);
+
+    // Adding Spheres
+    const objectsToUpdate: any[] = [];
+    const createSphere = (radius: number, position: any) => {
+      const mesh = new THREE.Mesh(
+        new THREE.SphereGeometry(radius, 20, 20),
+        new THREE.MeshStandardMaterial({
+          metalness: 0.3,
+          roughness: 0.4,
+          envMap: environmentMapTexture,
+          envMapIntensity: 0.5
+        })
+      );
+      mesh.castShadow = true;
+      mesh.position.copy(position);
+      scene.add(mesh);
+
+      // Adding physics body
+      const sphereShape = new CANNON.Sphere(radius);
+      const sphereBody = new CANNON.Body({
+        mass: 1,
+        position: new CANNON.Vec3(0, 3, 0),
+        shape: sphereShape,
+        material: defaultMaterial
+      });
+      sphereBody.position.copy(position);
+      world.addBody(sphereBody);
+
+      objectsToUpdate.push({
+        mesh,
+        sphereBody
       })
-    );
-    sphere.castShadow = true;
-    sphere.position.y = 0.5;
-    scene.add(sphere);
+    };
 
     /**
      * Floor
@@ -134,16 +168,30 @@ export class PhysicsWorld implements AfterViewInit, OnDestroy {
     const defaultMaterial = new CANNON.Material('default');
 
     // CANNON Sphere body
-    const sphereShape = new CANNON.Sphere(0.5);
-    const sphereBody = new CANNON.Body({
-      mass: 1,
-      position: new CANNON.Vec3(0, 3, 0),
-      shape: sphereShape,
-      // material: defaultMaterial
-    });
-    sphereBody.applyLocalForce(new CANNON.Vec3(150, 0, 0), new CANNON.Vec3(0, 0, 0));
+    // const sphereShape = new CANNON.Sphere(0.5);
+    // const sphereBody = new CANNON.Body({
+    //   mass: 1,
+    //   position: new CANNON.Vec3(0, 3, 0),
+    //   shape: sphereShape,
+    //   // material: defaultMaterial
+    // });
 
-    world.addBody(sphereBody);
+    // sphereBody.applyLocalForce(new CANNON.Vec3(150, 0, 0), new CANNON.Vec3(0, 0, 0));
+
+    // world.addBody(sphereBody);
+
+    debugObject.createSphere = () => {
+      createSphere(
+        Math.random() * 0.5,
+        {
+            x: (Math.random() - 0.5) * 3,
+            y: 3,
+            z: (Math.random() - 0.5) * 3
+        }
+      );
+    };
+
+    this.gui.add(debugObject, 'createSphere');
 
     // CANNON floor body
     const floorShape = new CANNON.Plane();
@@ -191,10 +239,13 @@ export class PhysicsWorld implements AfterViewInit, OnDestroy {
       oldElapsedTime = elapsedTime;
 
       // Update Physics World
-      sphereBody.applyForce(new CANNON.Vec3(-0.5, 0, 0), sphereBody.position);
+      // sphereBody.applyForce(new CANNON.Vec3(-0.5, 0, 0), sphereBody.position);
       world.step(1 / 60, deltaTime, 3);
-      sphere.position.copy(sphereBody.position);
-      sphere.quaternion.copy(sphereBody.quaternion);
+      // sphere.position.copy(sphereBody.position);
+      // sphere.quaternion.copy(sphereBody.quaternion);
+      for(const object of objectsToUpdate) {
+        object.mesh.position.copy(object.sphereBody.position);
+      }
 
       // Update controls
       controls.update();
@@ -205,6 +256,7 @@ export class PhysicsWorld implements AfterViewInit, OnDestroy {
       // Call tick again on the next frame
       this.frameId = window.requestAnimationFrame(tick);
     };
+
 
     tick();
   }
