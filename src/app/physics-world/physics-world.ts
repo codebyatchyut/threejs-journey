@@ -22,7 +22,7 @@ export class PhysicsWorld implements AfterViewInit, OnDestroy {
      * Debug
      */
     this.gui = new GUI();
-    const debugObject: {createSphere?: () => void;} = {};
+    const debugObject: {createSphere?: () => void; createBox?: () => void;} = {};
 
     // Scene
     const scene = new THREE.Scene();
@@ -86,7 +86,40 @@ export class PhysicsWorld implements AfterViewInit, OnDestroy {
 
       objectsToUpdate.push({
         mesh,
-        sphereBody
+        body: sphereBody
+      })
+    };
+
+    // Adding Boxes
+    const createBox = (width: number, height: number, depth: number, position: any) => {
+      const mesh = new THREE.Mesh(
+        new THREE.BoxGeometry(width, height, depth),
+        new THREE.MeshStandardMaterial({
+          metalness: 0.3,
+          roughness: 0.4,
+          envMap: environmentMapTexture,
+          envMapIntensity: 0.5
+        })
+      );
+      mesh.castShadow = true;
+      mesh.position.copy(position);
+      scene.add(mesh);
+
+      // Adding physics body
+      const boxShape = new CANNON.Box(
+        new CANNON.Vec3(width * 0.5, height * 0.5, depth * 0.5)
+      );
+      const boxBody = new CANNON.Body({
+        mass: 1,
+        shape: boxShape,
+        material: defaultMaterial
+      });
+      boxBody.position.copy(position);
+      world.addBody(boxBody);
+
+      objectsToUpdate.push({
+        mesh,
+        body: boxBody
       })
     };
 
@@ -191,7 +224,21 @@ export class PhysicsWorld implements AfterViewInit, OnDestroy {
       );
     };
 
+    debugObject.createBox = () => {
+      createBox(
+        Math.random(),
+        Math.random(),
+        Math.random(),
+        {
+            x: (Math.random() - 0.5) * 3,
+            y: 3,
+            z: (Math.random() - 0.5) * 3
+        }
+      );
+    };
+
     this.gui.add(debugObject, 'createSphere');
+    this.gui.add(debugObject, 'createBox');
 
     // CANNON floor body
     const floorShape = new CANNON.Plane();
@@ -244,7 +291,8 @@ export class PhysicsWorld implements AfterViewInit, OnDestroy {
       // sphere.position.copy(sphereBody.position);
       // sphere.quaternion.copy(sphereBody.quaternion);
       for(const object of objectsToUpdate) {
-        object.mesh.position.copy(object.sphereBody.position);
+        object.mesh.position.copy(object.body.position);
+        object.mesh.quaternion.copy(object.body.quaternion);
       }
 
       // Update controls
