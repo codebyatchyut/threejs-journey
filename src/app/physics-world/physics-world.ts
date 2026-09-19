@@ -22,7 +22,7 @@ export class PhysicsWorld implements AfterViewInit, OnDestroy {
      * Debug
      */
     this.gui = new GUI();
-    const debugObject: {createSphere?: () => void; createBox?: () => void;} = {};
+    const debugObject: {createSphere?: () => void; createBox?: () => void; reset?: () => void} = {};
 
     // Scene
     const scene = new THREE.Scene();
@@ -57,8 +57,19 @@ export class PhysicsWorld implements AfterViewInit, OnDestroy {
     // sphere.position.y = 0.5;
     // scene.add(sphere);
 
+    // Sound
+    const hitSound = new Audio('assets/textures/sounds/hit.mp3');
+    const playHitSound = (collision: any) => {
+      const impactStrength = collision.contact.getImpactVelocityAlongNormal();
+      if (impactStrength > 1.5) {
+        hitSound.volume = Math.random();
+        hitSound.currentTime = 0;
+        hitSound.play();
+      }
+    };
+
     // Adding Spheres
-    const objectsToUpdate: any[] = [];
+    const objectsToUpdate: { mesh: THREE.Mesh; body: Body }[] = [];
     const createSphere = (radius: number, position: any) => {
       const mesh = new THREE.Mesh(
         new THREE.SphereGeometry(radius, 20, 20),
@@ -120,7 +131,8 @@ export class PhysicsWorld implements AfterViewInit, OnDestroy {
       objectsToUpdate.push({
         mesh,
         body: boxBody
-      })
+      });
+      boxBody.addEventListener('collide', playHitSound);
     };
 
     /**
@@ -139,6 +151,17 @@ export class PhysicsWorld implements AfterViewInit, OnDestroy {
     floor.receiveShadow = true;
     floor.rotation.x = - Math.PI * 0.5;
     scene.add(floor);
+
+    // Resetbutton
+    const reset = () => {
+      for (const object of objectsToUpdate) {
+        object.body.removeEventListener('collide', playHitSound);
+        world.remove(object.body);
+        scene.remove(object.mesh);
+      }
+
+      objectsToUpdate.length = 0;
+    };
 
     /**
      * Lights
@@ -237,8 +260,13 @@ export class PhysicsWorld implements AfterViewInit, OnDestroy {
       );
     };
 
+    debugObject.reset = () => {
+      reset();
+    }
+
     this.gui.add(debugObject, 'createSphere');
     this.gui.add(debugObject, 'createBox');
+    this.gui.add(debugObject, 'reset');
 
     // CANNON floor body
     const floorShape = new CANNON.Plane();
