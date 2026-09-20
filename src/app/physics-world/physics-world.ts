@@ -2,7 +2,7 @@ import { AfterViewInit, Component, ElementRef, OnDestroy, viewChild } from '@ang
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import GUI from 'lil-gui';
-import CANNON, { Body, ContactMaterial, Shape } from 'cannon';
+import CANNON, { Body, ContactMaterial } from 'cannon';
 
 @Component({
   selector: 'app-physics-world',
@@ -41,22 +41,6 @@ export class PhysicsWorld implements AfterViewInit, OnDestroy {
       'assets/textures/environmentMaps/0/nz.png'
     ]);
 
-    /**
-     * Test sphere
-     */
-    // const sphere = new THREE.Mesh(
-    //   new THREE.SphereGeometry(0.5, 32, 32),
-    //   new THREE.MeshStandardMaterial({
-    //     metalness: 0.3,
-    //     roughness: 0.4,
-    //     envMap: environmentMapTexture,
-    //     envMapIntensity: 0.5
-    //   })
-    // );
-    // sphere.castShadow = true;
-    // sphere.position.y = 0.5;
-    // scene.add(sphere);
-
     // Sound
     const hitSound = new Audio('assets/textures/sounds/hit.mp3');
     const playHitSound = (collision: any) => {
@@ -88,7 +72,6 @@ export class PhysicsWorld implements AfterViewInit, OnDestroy {
       const sphereShape = new CANNON.Sphere(radius);
       const sphereBody = new CANNON.Body({
         mass: 1,
-        position: new CANNON.Vec3(0, 3, 0),
         shape: sphereShape,
         material: defaultMaterial
       });
@@ -219,22 +202,7 @@ export class PhysicsWorld implements AfterViewInit, OnDestroy {
     world.gravity.set(0, - 9.82, 0);
     
     // CANNON Materials
-    // const concreteMaterial = new CANNON.Material('concrete');
-    // const plasticMaterial = new CANNON.Material('plastic');
     const defaultMaterial = new CANNON.Material('default');
-
-    // CANNON Sphere body
-    // const sphereShape = new CANNON.Sphere(0.5);
-    // const sphereBody = new CANNON.Body({
-    //   mass: 1,
-    //   position: new CANNON.Vec3(0, 3, 0),
-    //   shape: sphereShape,
-    //   // material: defaultMaterial
-    // });
-
-    // sphereBody.applyLocalForce(new CANNON.Vec3(150, 0, 0), new CANNON.Vec3(0, 0, 0));
-
-    // world.addBody(sphereBody);
 
     debugObject.createSphere = () => {
       createSphere(
@@ -260,9 +228,7 @@ export class PhysicsWorld implements AfterViewInit, OnDestroy {
       );
     };
 
-    debugObject.reset = () => {
-      reset();
-    }
+    debugObject.reset = reset;
 
     this.gui.add(debugObject, 'createSphere');
     this.gui.add(debugObject, 'createBox');
@@ -273,7 +239,6 @@ export class PhysicsWorld implements AfterViewInit, OnDestroy {
     const floorBody = new CANNON.Body();
     floorBody.mass = 0;
     floorBody.addShape(floorShape);
-    // floorBody.material = defaultMaterial;
     world.addBody(floorBody);
 
     floorBody.quaternion.setFromAxisAngle(
@@ -314,10 +279,7 @@ export class PhysicsWorld implements AfterViewInit, OnDestroy {
       oldElapsedTime = elapsedTime;
 
       // Update Physics World
-      // sphereBody.applyForce(new CANNON.Vec3(-0.5, 0, 0), sphereBody.position);
       world.step(1 / 60, deltaTime, 3);
-      // sphere.position.copy(sphereBody.position);
-      // sphere.quaternion.copy(sphereBody.quaternion);
       for(const object of objectsToUpdate) {
         object.mesh.position.copy(object.body.position);
         object.mesh.quaternion.copy(object.body.quaternion);
@@ -332,7 +294,6 @@ export class PhysicsWorld implements AfterViewInit, OnDestroy {
       // Call tick again on the next frame
       this.frameId = window.requestAnimationFrame(tick);
     };
-
 
     tick();
   }
