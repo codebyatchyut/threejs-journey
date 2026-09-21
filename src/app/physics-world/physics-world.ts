@@ -4,6 +4,18 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import GUI from 'lil-gui';
 import CANNON, { Body, ContactMaterial } from 'cannon';
 
+/** A plain {x, y, z} spawn point — accepted by both THREE and CANNON. */
+interface Position {
+  x: number;
+  y: number;
+  z: number;
+}
+
+/** The shape of the `collide` event cannon emits on a body. */
+interface CollideEvent {
+  contact: { getImpactVelocityAlongNormal(): number };
+}
+
 @Component({
   selector: 'app-physics-world',
   imports: [],
@@ -16,6 +28,12 @@ export class PhysicsWorld implements AfterViewInit, OnDestroy {
   private renderer!: THREE.WebGLRenderer;
   private gui!: GUI;
   private frameId = 0;
+
+  /** Cancels every window listener registered in ngAfterViewInit. */
+  private readonly listeners = new AbortController();
+
+  /** Shared GPU resources, released in ngOnDestroy. */
+  private readonly disposables: { dispose(): void }[] = [];
 
   ngAfterViewInit(): void {
     /**
@@ -40,100 +58,135 @@ export class PhysicsWorld implements AfterViewInit, OnDestroy {
       'assets/textures/environmentMaps/0/pz.png',
       'assets/textures/environmentMaps/0/nz.png'
     ]);
+    this.disposables.push(environmentMapTexture);
 
     // Sound
     const hitSound = new Audio('assets/textures/sounds/hit.mp3');
-    const playHitSound = (collision: any) => {
+    const playHitSound = (collision: CollideEvent) => {
       const impactStrength = collision.contact.getImpactVelocityAlongNormal();
       if (impactStrength > 1.5) {
         hitSound.volume = Math.random();
         hitSound.currentTime = 0;
-        hitSound.play();
+        // Autoplay can be blocked until the user has interacted with the page.
+        hitSound.play().catch(() => {});
       }
     };
 
-    // Adding Spheres
+    /**
+     * Physics world
+     */
+    const world = new CANNON.World();
+    world.gravity.set(0, - 9.82, 0);
+
+    // Only test pairs whose bounding volumes overlap, instead of every pair.
+    world.broadphase = new CANNON.SAPBroadphase(world);
+    // Let bodies that have come to rest drop out of the simulation.
+    world.allowSleep = true;
+
+    const defaultMaterial = new CANNON.Material('default');
+
+    // Friction and restitution to apply when two default-material bodies collide
+    const defaultContactMaterial = new ContactMaterial(
+      defaultMaterial,
+      defaultMaterial,
+      {
+        friction: 0.1,
+        restitution: 0.7
+      }
+    );
+    world.addContactMaterial(defaultContactMaterial);
+    world.defaultContactMaterial = defaultContactMaterial;
+
+    /**
+     * Shared geometry and material
+     *
+     * Built once at unit size and scaled per instance, so every sphere and box
+     * reuses one geometry, one material and one compiled shader program.
+     */
+    const sphereGeometry = new THREE.SphereGeometry(1, 20, 20);
+    const boxGeometry = new THREE.BoxGeometry(1, 1, 1);
+    const objectMaterial = new THREE.MeshStandardMaterial({
+      metalness: 0.3,
+      roughness: 0.4,
+      envMap: environmentMapTexture,
+      envMapIntensity: 0.5
+    });
+    this.disposables.push(sphereGeometry, boxGeometry, objectMaterial);
+
     const objectsToUpdate: { mesh: THREE.Mesh; body: Body }[] = [];
-    const createSphere = (radius: number, position: any) => {
-      const mesh = new THREE.Mesh(
-        new THREE.SphereGeometry(radius, 20, 20),
-        new THREE.MeshStandardMaterial({
-          metalness: 0.3,
-          roughness: 0.4,
-          envMap: environmentMapTexture,
-          envMapIntensity: 0.5
-        })
-      );
+
+    /** Adds a mesh/body pair to the scene, the physics world and the update list. */
+    const addObject = (mesh: THREE.Mesh, body: Body, position: Position) => {
       mesh.castShadow = true;
-      mesh.position.copy(position);
+      mesh.position.set(position.x, position.y, position.z);
       scene.add(mesh);
 
-      // Adding physics body
-      const sphereShape = new CANNON.Sphere(radius);
-      const sphereBody = new CANNON.Body({
+      body.position.set(position.x, position.y, position.z);
+      body.addEventListener('collide', playHitSound);
+      world.addBody(body);
+
+      objectsToUpdate.push({ mesh, body });
+    };
+
+    // Adding Spheres
+    const createSphere = (radius: number, position: Position) => {
+      const mesh = new THREE.Mesh(sphereGeometry, objectMaterial);
+      mesh.scale.setScalar(radius);
+
+      const body = new CANNON.Body({
         mass: 1,
-        shape: sphereShape,
+        shape: new CANNON.Sphere(radius),
         material: defaultMaterial
       });
-      sphereBody.position.copy(position);
-      world.addBody(sphereBody);
 
-      objectsToUpdate.push({
-        mesh,
-        body: sphereBody
-      })
+      addObject(mesh, body, position);
     };
 
     // Adding Boxes
-    const createBox = (width: number, height: number, depth: number, position: any) => {
-      const mesh = new THREE.Mesh(
-        new THREE.BoxGeometry(width, height, depth),
-        new THREE.MeshStandardMaterial({
-          metalness: 0.3,
-          roughness: 0.4,
-          envMap: environmentMapTexture,
-          envMapIntensity: 0.5
-        })
-      );
-      mesh.castShadow = true;
-      mesh.position.copy(position);
-      scene.add(mesh);
+    const createBox = (width: number, height: number, depth: number, position: Position) => {
+      const mesh = new THREE.Mesh(boxGeometry, objectMaterial);
+      mesh.scale.set(width, height, depth);
 
-      // Adding physics body
-      const boxShape = new CANNON.Box(
-        new CANNON.Vec3(width * 0.5, height * 0.5, depth * 0.5)
-      );
-      const boxBody = new CANNON.Body({
+      const body = new CANNON.Body({
         mass: 1,
-        shape: boxShape,
+        shape: new CANNON.Box(
+          new CANNON.Vec3(width * 0.5, height * 0.5, depth * 0.5)
+        ),
         material: defaultMaterial
       });
-      boxBody.position.copy(position);
-      world.addBody(boxBody);
 
-      objectsToUpdate.push({
-        mesh,
-        body: boxBody
-      });
-      boxBody.addEventListener('collide', playHitSound);
+      addObject(mesh, body, position);
     };
 
     /**
      * Floor
      */
-    const floor = new THREE.Mesh(
-      new THREE.PlaneGeometry(10, 10),
-      new THREE.MeshStandardMaterial({
-        color: '#777777',
-        metalness: 0.3,
-        roughness: 0.4,
-        envMap: environmentMapTexture,
-        envMapIntensity: 0.5
-      })
-    );
+    const floorGeometry = new THREE.PlaneGeometry(10, 10);
+    const floorMaterial = new THREE.MeshStandardMaterial({
+      color: '#777777',
+      metalness: 0.3,
+      roughness: 0.4,
+      envMap: environmentMapTexture,
+      envMapIntensity: 0.5
+    });
+    this.disposables.push(floorGeometry, floorMaterial);
+
+    const floor = new THREE.Mesh(floorGeometry, floorMaterial);
     floor.receiveShadow = true;
     floor.rotation.x = - Math.PI * 0.5;
     scene.add(floor);
+
+    // CANNON floor body
+    const floorBody = new CANNON.Body({
+      mass: 0,
+      shape: new CANNON.Plane(),
+      material: defaultMaterial
+    });
+    floorBody.quaternion.setFromAxisAngle(
+      new CANNON.Vec3(-1, 0, 0),
+      Math.PI * 0.5
+    );
+    world.addBody(floorBody);
 
     // Resetbutton
     const reset = () => {
@@ -183,7 +236,7 @@ export class PhysicsWorld implements AfterViewInit, OnDestroy {
       // Update renderer
       this.renderer.setSize(sizes.width, sizes.height);
       this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-    });
+    }, { signal: this.listeners.signal });
 
     /**
      * Camera
@@ -196,36 +249,23 @@ export class PhysicsWorld implements AfterViewInit, OnDestroy {
     // Controls
     const controls = new OrbitControls(this.camera, this.canvas().nativeElement);
     controls.enableDamping = true;
+    this.disposables.push(controls);
 
-    // Physics
-    const world = new CANNON.World();
-    world.gravity.set(0, - 9.82, 0);
-    
-    // CANNON Materials
-    const defaultMaterial = new CANNON.Material('default');
+    /**
+     * Debug tweaks
+     */
+    const randomPosition = (): Position => ({
+      x: (Math.random() - 0.5) * 3,
+      y: 3,
+      z: (Math.random() - 0.5) * 3
+    });
 
     debugObject.createSphere = () => {
-      createSphere(
-        Math.random() * 0.5,
-        {
-            x: (Math.random() - 0.5) * 3,
-            y: 3,
-            z: (Math.random() - 0.5) * 3
-        }
-      );
+      createSphere(Math.random() * 0.5, randomPosition());
     };
 
     debugObject.createBox = () => {
-      createBox(
-        Math.random(),
-        Math.random(),
-        Math.random(),
-        {
-            x: (Math.random() - 0.5) * 3,
-            y: 3,
-            z: (Math.random() - 0.5) * 3
-        }
-      );
+      createBox(Math.random(), Math.random(), Math.random(), randomPosition());
     };
 
     debugObject.reset = reset;
@@ -234,29 +274,6 @@ export class PhysicsWorld implements AfterViewInit, OnDestroy {
     this.gui.add(debugObject, 'createBox');
     this.gui.add(debugObject, 'reset');
 
-    // CANNON floor body
-    const floorShape = new CANNON.Plane();
-    const floorBody = new CANNON.Body();
-    floorBody.mass = 0;
-    floorBody.addShape(floorShape);
-    world.addBody(floorBody);
-
-    floorBody.quaternion.setFromAxisAngle(
-      new CANNON.Vec3(-1, 0, 0),
-      Math.PI * 0.5
-    );
-
-    // Contact material, means apply these physics rules when two objects are collide (friction, restitution)
-    const defaultContactMaterial = new ContactMaterial(
-      defaultMaterial,
-      defaultMaterial,
-      {
-        friction: 0.1,
-        restitution: 0.7
-      }
-    );
-    world.addContactMaterial(defaultContactMaterial);
-    world.defaultContactMaterial = defaultContactMaterial;
     /**
      * Renderer
      */
@@ -280,7 +297,7 @@ export class PhysicsWorld implements AfterViewInit, OnDestroy {
 
       // Update Physics World
       world.step(1 / 60, deltaTime, 3);
-      for(const object of objectsToUpdate) {
+      for (const object of objectsToUpdate) {
         object.mesh.position.copy(object.body.position);
         object.mesh.quaternion.copy(object.body.quaternion);
       }
@@ -300,7 +317,13 @@ export class PhysicsWorld implements AfterViewInit, OnDestroy {
 
   ngOnDestroy(): void {
     cancelAnimationFrame(this.frameId);
+    this.listeners.abort();
     this.gui.destroy();
+
+    for (const disposable of this.disposables) {
+      disposable.dispose();
+    }
+
     this.renderer.dispose();
   }
 }
