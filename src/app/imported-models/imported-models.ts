@@ -1,6 +1,7 @@
 import { AfterViewInit, Component, ElementRef, OnDestroy, viewChild } from '@angular/core';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import GUI from 'lil-gui';
 
 @Component({
@@ -15,6 +16,7 @@ export class ImportedModels implements AfterViewInit, OnDestroy {
   private renderer!: THREE.WebGLRenderer;
   private gui!: GUI;
   private frameId = 0;
+  private mixer!: THREE.AnimationMixer;
 
   /** Cancels every window listener registered in ngAfterViewInit. */
   private readonly listeners = new AbortController();
@@ -63,6 +65,30 @@ export class ImportedModels implements AfterViewInit, OnDestroy {
     directionalLight.shadow.camera.bottom = - 7;
     directionalLight.position.set(5, 5, 5);
     scene.add(directionalLight);
+
+    // GLTF Loader
+    const gltfLoader = new GLTFLoader();
+    gltfLoader.load(
+      // 'assets/models/FlightHelmet/glTF/FlightHelmet.gltf',
+      'assets/models/Fox/glTF/Fox.gltf',
+      (gltf) => {
+        console.log('Loaded model:', gltf);
+        // scene.add(gltf.scene);
+        // scene.add(gltf.scene.children[0]);
+        // for(var i = 0; i < gltf.scene.children.length; i++) {
+        //   scene.add(gltf.scene.children[i]);
+        // }        
+        // const helmetChildern = [...gltf.scene.children];
+        // for (const child of helmetChildern) {
+        //   scene.add(child);
+        // }
+        gltf.scene.scale.set(0.025, 0.025, 0.025);
+        scene.add(gltf.scene);
+        this.mixer = new THREE.AnimationMixer(gltf.scene);
+        const action = this.mixer.clipAction(gltf.animations[2]);
+        action.play();
+      }
+    );
 
     /**
      * Sizes
@@ -114,7 +140,9 @@ export class ImportedModels implements AfterViewInit, OnDestroy {
     /**
      * Animate
      */
+    const clock = new THREE.Clock();
     const tick = () => {
+      const deltaTime = clock.getDelta();
       // Update controls
       controls.update();
 
@@ -123,6 +151,11 @@ export class ImportedModels implements AfterViewInit, OnDestroy {
 
       // Call tick again on the next frame
       this.frameId = window.requestAnimationFrame(tick);
+
+      // Update mixer
+      if (this.mixer) {
+        this.mixer.update(deltaTime);
+      }
     };
 
     tick();
