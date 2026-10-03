@@ -73,20 +73,20 @@ export class ImportedModels implements AfterViewInit, OnDestroy {
       'assets/models/Fox/glTF/Fox.gltf',
       (gltf) => {
         console.log('Loaded model:', gltf);
-        // scene.add(gltf.scene);
-        // scene.add(gltf.scene.children[0]);
-        // for(var i = 0; i < gltf.scene.children.length; i++) {
-        //   scene.add(gltf.scene.children[i]);
-        // }        
-        // const helmetChildern = [...gltf.scene.children];
-        // for (const child of helmetChildern) {
-        //   scene.add(child);
-        // }
-        gltf.scene.scale.set(0.025, 0.025, 0.025);
         scene.add(gltf.scene);
-        this.mixer = new THREE.AnimationMixer(gltf.scene);
-        const action = this.mixer.clipAction(gltf.animations[2]);
-        action.play();
+        scene.add(gltf.scene.children[0]);
+        for(var i = 0; i < gltf.scene.children.length; i++) {
+          scene.add(gltf.scene.children[i]);
+        }        
+        const helmetChildern = [...gltf.scene.children];
+        for (const child of helmetChildern) {
+          scene.add(child);
+        }
+        // gltf.scene.scale.set(0.025, 0.025, 0.025);
+        // scene.add(gltf.scene);
+        // this.mixer = new THREE.AnimationMixer(gltf.scene);
+        // const action = this.mixer.clipAction(gltf.animations[2]);
+        // action.play();
       }
     );
 
