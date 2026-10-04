@@ -16,7 +16,7 @@ export class ImportedModels implements AfterViewInit, OnDestroy {
   private renderer!: THREE.WebGLRenderer;
   private gui!: GUI;
   private frameId = 0;
-  private mixer!: THREE.AnimationMixer;
+  private mixer?: THREE.AnimationMixer;
 
   /** Cancels every window listener registered in ngAfterViewInit. */
   private readonly listeners = new AbortController();
@@ -72,21 +72,32 @@ export class ImportedModels implements AfterViewInit, OnDestroy {
       // 'assets/models/FlightHelmet/glTF/FlightHelmet.gltf',
       'assets/models/Fox/glTF/Fox.gltf',
       (gltf) => {
-        console.log('Loaded model:', gltf);
+        gltf.scene.scale.set(0.025, 0.025, 0.025);
+        gltf.scene.traverse((child) => {
+          if ((child as THREE.Mesh).isMesh) {
+            child.castShadow = true;
+          }
+        });
         scene.add(gltf.scene);
-        scene.add(gltf.scene.children[0]);
-        for(var i = 0; i < gltf.scene.children.length; i++) {
-          scene.add(gltf.scene.children[i]);
-        }        
-        const helmetChildern = [...gltf.scene.children];
-        for (const child of helmetChildern) {
-          scene.add(child);
-        }
-        // gltf.scene.scale.set(0.025, 0.025, 0.025);
-        // scene.add(gltf.scene);
-        // this.mixer = new THREE.AnimationMixer(gltf.scene);
-        // const action = this.mixer.clipAction(gltf.animations[2]);
-        // action.play();
+
+        // Animations
+        const mixer = new THREE.AnimationMixer(gltf.scene);
+        this.mixer = mixer;
+        const actions = gltf.animations.map((clip) => mixer.clipAction(clip));
+        let currentAction = actions[0];
+        currentAction?.play();
+
+        const animation = { clip: gltf.animations[0]?.name ?? '' };
+        this.gui
+          .add(animation, 'clip', gltf.animations.map((clip) => clip.name))
+          .name('Animation')
+          .onChange((name: string) => {
+            const nextAction = actions.find((action) => action.getClip().name === name);
+            if (!nextAction || nextAction === currentAction) return;
+            nextAction.reset().play();
+            currentAction.crossFadeTo(nextAction, 0.5, false);
+            currentAction = nextAction;
+          });
       }
     );
 
@@ -143,6 +154,10 @@ export class ImportedModels implements AfterViewInit, OnDestroy {
     const clock = new THREE.Clock();
     const tick = () => {
       const deltaTime = clock.getDelta();
+
+      // Update mixer
+      this.mixer?.update(deltaTime);
+
       // Update controls
       controls.update();
 
@@ -151,11 +166,6 @@ export class ImportedModels implements AfterViewInit, OnDestroy {
 
       // Call tick again on the next frame
       this.frameId = window.requestAnimationFrame(tick);
-
-      // Update mixer
-      if (this.mixer) {
-        this.mixer.update(deltaTime);
-      }
     };
 
     tick();
@@ -165,6 +175,7 @@ export class ImportedModels implements AfterViewInit, OnDestroy {
     cancelAnimationFrame(this.frameId);
     this.listeners.abort();
     this.gui.destroy();
+    this.mixer?.stopAllAction();
 
     for (const disposable of this.disposables) {
       disposable.dispose();
