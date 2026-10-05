@@ -87,17 +87,6 @@ export class ImportedModels implements AfterViewInit, OnDestroy {
         let currentAction = actions[0];
         currentAction?.play();
 
-        const animation = { clip: gltf.animations[0]?.name ?? '' };
-        this.gui
-          .add(animation, 'clip', gltf.animations.map((clip) => clip.name))
-          .name('Animation')
-          .onChange((name: string) => {
-            const nextAction = actions.find((action) => action.getClip().name === name);
-            if (!nextAction || nextAction === currentAction) return;
-            nextAction.reset().play();
-            currentAction.crossFadeTo(nextAction, 0.5, false);
-            currentAction = nextAction;
-          });
       }
     );
 
